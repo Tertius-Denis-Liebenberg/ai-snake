@@ -16,11 +16,15 @@ class Agent:
             print('No Settings file found!')
 
         self.n_games = 0
-        self.epsilon = 0 # Randomness
         self.gamma = self.default_settings['gamma'] # Discount Rate
         self.memory = deque(maxlen=self.default_settings['max_memory']) # popleft()
         self.model = Linear_QNet(self.default_settings['input'], self.default_settings['hidden'], self.default_settings['output'])
         self.trainer = QTrainer(self.model, lr=self.default_settings['lr'], gamma=self.gamma)
+
+        # Randomness
+        self.epsilon = self.default_settings['epsilon_start']
+        self.epsilon_min = self.default_settings['epsilon_min']
+        self.epsilon_decay = self.default_settings['epsilon_decay']
 
     def get_state(self, game):
         head = game.snake[0]
@@ -79,9 +83,9 @@ class Agent:
             has_special_food and game.special_food.y > game.head.y, # special food down
 
             # Extra Parameters
-            game.current_level,
+            game.current_level / 5,
             fill_ratio,
-            game.frame_iteration
+            100 * len(game.snake) - game.frame_iteration 
         ]
 
         return np.array(state, dtype=float)
@@ -102,11 +106,11 @@ class Agent:
         self.trainer.train_step(state, action, reward, level, next_state, game_over, game_won)
 
     def get_action(self, state):
-        # Random moves: trade off exploration / exploitation
-        self.epsilon = 80 - self.n_games
+        # Exploration vs Exploitation
         final_move = [0, 0, 0]
-
-        if random.randint(0, 200) < self.epsilon:
+        
+        # Use self.epsilon directly (it now represents a probability between 0 and 1)
+        if random.random() < self.epsilon:
             move = random.randint(0, 2)
             final_move[move] = 1
         else:
@@ -149,11 +153,15 @@ def train():
             agent.n_games += 1
             agent.train_long_memory()
 
+            # Decay epsilon
+            if agent.epsilon > agent.epsilon_min:
+                agent.epsilon *= agent.epsilon_decay
+
             if score > record:
                 record = score
                 agent.model.save(file_name=agent.default_settings['file_name'])
 
-            print(f'|    Game:  {agent.n_games}   |  Score:  {score}  |   High Score:  {record}   |   Duration:  {duration}   |')
+            print(f'|    Game:  {agent.n_games}   |  Score:  {score}  |   High Score:  {record}   |   Duration:  {duration}   |   Epsilon:  {agent.epsilon:.3f}   |')
 
             # Plot Results
             plot_scores.append(score)

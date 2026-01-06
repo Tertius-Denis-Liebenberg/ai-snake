@@ -229,7 +229,10 @@ class SnakeGameAI():
         game_over = False
         eaten = False
         food_distance = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
-        special_food_distance = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
+        if self.special_food:
+            special_food_distance = math.sqrt((self.head.x - self.special_food.x)**2 + (self.head.y - self.special_food.y)**2)
+        else:
+            special_food_distance = 0
 
         if self.game_won:
             reward = self.default_rewards['win']
@@ -269,7 +272,10 @@ class SnakeGameAI():
             self.special_food = None
         else:
             new_food_distance = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
-            new_special_food_distance = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
+            if self.special_food:
+                new_special_food_distance = math.sqrt((self.head.x - self.special_food.x)**2 + (self.head.y - self.special_food.y)**2)
+            else:
+                new_special_food_distance = 0
 
             if food_distance > new_food_distance or special_food_distance > new_special_food_distance:
                 reward += self.default_rewards['closer_to_food']

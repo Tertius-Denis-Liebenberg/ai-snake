@@ -5,9 +5,13 @@
     "gamma": 0.9,
 
     "input": 19,
-    "hidden": 254,
+    "hidden": [254, 512, 254],
     "output": 3,
 
     "file_name": "model.pth",
-    "render_ui": false
+    "render_ui": false,
+
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.01,
+    "epsilon_decay": 0.998
 }
