@@ -1,0 +1,13 @@
+{
+    "max_memory": 100000,
+    "batch_size": 1000,
+    "lr": 0.001,
+    "gamma": 0.9,
+
+    "input": 18,
+    "hidden": 254,
+    "output": 3,
+
+    "file_name": "model.pth",
+    "render_ui": false
+}

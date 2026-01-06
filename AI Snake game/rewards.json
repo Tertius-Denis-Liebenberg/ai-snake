@@ -1,0 +1,7 @@
+{
+    "eat_food": 10,
+    "eat_special_food": 20,
+    "level_up": 100,
+    "win": 500,
+    "game_over": -20
+}
