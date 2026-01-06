@@ -80,7 +80,8 @@ class Agent:
 
             # Extra Parameters
             game.current_level,
-            fill_ratio
+            fill_ratio,
+            game.frame_iteration
         ]
 
         return np.array(state, dtype=float)
@@ -123,7 +124,7 @@ def train():
     total_score = 0
     record = 0
     agent = Agent()
-    game = SnakeGameAI()
+    game = SnakeGameAI(agent.default_settings['render_ui'])
 
     while True:
         # get old State

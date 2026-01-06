@@ -4,7 +4,7 @@
     "lr": 0.001,
     "gamma": 0.9,
 
-    "input": 18,
+    "input": 19,
     "hidden": 254,
     "output": 3,
 

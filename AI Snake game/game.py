@@ -62,18 +62,19 @@ Point = namedtuple('Point', 'x, y')
 # ----- Snake Game -----
 class SnakeGameAI():
 
-    def __init__(self):
+    def __init__(self, render = True):
+        self.render = render
+        self.clock = pygame.time.Clock()
+        self.high_score = self._load_high_score()
+        self.reset()
+    
+    def reset(self):
         try:
             with open('rewards.json', 'r') as file:
                 self.default_rewards = json.load(file)
         except:
             print('No rewards file found!')
 
-        self.clock = pygame.time.Clock()
-        self.high_score = self._load_high_score()
-        self.reset()
-    
-    def reset(self):
         # Game State
         self.start_time = time.time()
         self.current_level = 1
@@ -227,7 +228,9 @@ class SnakeGameAI():
         game_won = False
         game_over = False
         eaten = False
-        
+        food_distance = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
+        special_food_distance = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
+
         if self.game_won:
             reward = self.default_rewards['win']
             game_over = True
@@ -250,7 +253,7 @@ class SnakeGameAI():
         # Check Food
         if self.head == self.food:
             self.score += 1
-            reward += self.default_rewards['eat_food']
+            reward += self.default_rewards['eat_food'] - (1.5 * self.frame_iteration)
             eaten = True
             self.frame_iteration = 0
             if EAT_SOUND: EAT_SOUND.play()
@@ -260,12 +263,17 @@ class SnakeGameAI():
             
         elif self.head == self.special_food:
             self.score += 3
-            reward += self.default_rewards['eat_special_food']
+            reward += self.default_rewards['eat_special_food'] - (1.5 * self.frame_iteration)
             eaten = True
             if EAT_SOUND: EAT_SOUND.play()
             self.special_food = None
         else:
-            # If we didn't eat, remove tail
+            new_food_distance = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
+            new_special_food_distance = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
+
+            if food_distance > new_food_distance or special_food_distance > new_special_food_distance:
+                reward += self.default_rewards['closer_to_food']
+
             self.snake.pop()
 
         # Special food logic
