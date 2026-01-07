@@ -1,9 +1,10 @@
 {
-    "eat_food": 5,
-    "eat_special_food": 10,
-    "level_up": 20,
-    "win": 50,
-    "game_over": -10,
+    "eat_food": 10,
+    "eat_special_food": 15,
+    "level_up": 50,
+    "win": 100,
+    "game_over": -15,
 
-    "closer_to_food": 0.1
+    "closer_to_food": 0.01,
+    "away_from_food": -0.015
 }

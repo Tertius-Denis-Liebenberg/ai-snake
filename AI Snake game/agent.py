@@ -6,7 +6,6 @@ from collections import deque
 from game import SnakeGameAI, Direction, Point, BLOCK_SIZE
 from model import Linear_QNet, QTrainer
 from helper import plot
-
 class Agent:
     def __init__(self):
         try:
@@ -29,37 +28,40 @@ class Agent:
     def get_state(self, game):
         head = game.snake[0]
 
-        point_l = Point(head.x - BLOCK_SIZE, head.y)
-        point_r = Point(head.x + BLOCK_SIZE, head.y)
-        point_u = Point(head.x, head.y - BLOCK_SIZE)
-        point_d = Point(head.x, head.y + BLOCK_SIZE)
-
         dir_l = game.direction == Direction.LEFT
         dir_r = game.direction == Direction.RIGHT
         dir_u = game.direction == Direction.UP
         dir_d = game.direction == Direction.DOWN
 
+        def check_danger(dist):
+            # Checks if there is a collision 'dist' blocks away
+            p_r = Point(head.x + (BLOCK_SIZE * dist), head.y)
+            p_l = Point(head.x - (BLOCK_SIZE * dist), head.y)
+            p_u = Point(head.x, head.y - (BLOCK_SIZE * dist))
+            p_d = Point(head.x, head.y + (BLOCK_SIZE * dist))
+            
+            return [
+                (dir_r and game.is_collision(p_r)) or (dir_l and game.is_collision(p_l)) or 
+                (dir_u and game.is_collision(p_u)) or (dir_d and game.is_collision(p_d)), # Straight
+                
+                (dir_u and game.is_collision(p_r)) or (dir_d and game.is_collision(p_l)) or 
+                (dir_l and game.is_collision(p_u)) or (dir_r and game.is_collision(p_d)), # Right
+                
+                (dir_d and game.is_collision(p_r)) or (dir_u and game.is_collision(p_l)) or 
+                (dir_r and game.is_collision(p_u)) or (dir_l and game.is_collision(p_d))  # Left
+            ]
+
+        danger_1 = check_danger(1)
+        danger_2 = check_danger(2)
+        danger_3 = check_danger(3)
+
         has_special_food = game.special_food is not None
         fill_ratio = game.get_fill_ratio()
 
         state = [
-            # Danger straight
-            (dir_r and game.is_collision(point_r)) or
-            (dir_l and game.is_collision(point_l)) or
-            (dir_u and game.is_collision(point_u)) or
-            (dir_d and game.is_collision(point_d)),
-
-            # Danger right
-            (dir_u and game.is_collision(point_r)) or
-            (dir_d and game.is_collision(point_l)) or
-            (dir_l and game.is_collision(point_u)) or
-            (dir_r and game.is_collision(point_d)),
-
-            # Danger left
-            (dir_d and game.is_collision(point_r)) or
-            (dir_u and game.is_collision(point_l)) or
-            (dir_r and game.is_collision(point_u)) or
-            (dir_l and game.is_collision(point_d)),
+            *danger_1, # 3 values
+            *danger_2, # 3 values
+            *danger_3, # 3 values
 
             # Move Direction
             dir_l,
@@ -84,8 +86,8 @@ class Agent:
 
             # Extra Parameters
             game.current_level / 5,
-            fill_ratio,
-            100 * len(game.snake) - game.frame_iteration 
+            fill_ratio / 100,
+            (100 * len(game.snake) - game.frame_iteration) / 100
         ]
 
         return np.array(state, dtype=float)

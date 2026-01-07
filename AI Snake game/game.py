@@ -247,7 +247,12 @@ class SnakeGameAI():
         if self.is_collision() or self.frame_iteration > 100 * len(self.snake):
             if GAME_OVER_SOUND: GAME_OVER_SOUND.play()
             game_over = True
-            reward = self.default_rewards['game_over']
+            
+            if self.frame_iteration > 100 * len(self.snake):
+                reward = self.default_rewards['game_over'] + (self.default_rewards['away_from_food'] * self.frame_iteration)
+            else:
+                reward = self.default_rewards['game_over']
+
             if self.score > self.high_score:
                 self.high_score = self.score
                 self._save_high_score()
@@ -256,7 +261,7 @@ class SnakeGameAI():
         # Check Food
         if self.head == self.food:
             self.score += 1
-            reward += self.default_rewards['eat_food'] - (1.5 * self.frame_iteration)
+            reward += self.default_rewards['eat_food'] + (self.default_rewards['away_from_food'] * self.frame_iteration)
             eaten = True
             self.frame_iteration = 0
             if EAT_SOUND: EAT_SOUND.play()
@@ -266,7 +271,7 @@ class SnakeGameAI():
             
         elif self.head == self.special_food:
             self.score += 3
-            reward += self.default_rewards['eat_special_food'] - (1.5 * self.frame_iteration)
+            reward += self.default_rewards['eat_special_food'] + (self.default_rewards['away_from_food'] * self.frame_iteration)
             eaten = True
             if EAT_SOUND: EAT_SOUND.play()
             self.special_food = None
@@ -279,6 +284,8 @@ class SnakeGameAI():
 
             if food_distance > new_food_distance or special_food_distance > new_special_food_distance:
                 reward += self.default_rewards['closer_to_food']
+            else:
+                reward += self.default_rewards['away_from_food']
 
             self.snake.pop()
 
