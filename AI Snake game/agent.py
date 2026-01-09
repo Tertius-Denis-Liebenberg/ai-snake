@@ -6,173 +6,144 @@ from collections import deque
 from game import SnakeGameAI, Direction, Point, BLOCK_SIZE
 from model import Linear_QNet, QTrainer
 from helper import plot
+
 class Agent:
     def __init__(self):
         try:
             with open('settings.json', 'r') as file:
-                self.default_settings = json.load(file)
+                self.settings = json.load(file)
         except:
-            print('No Settings file found!')
+            print('No settings file found!')
 
         self.n_games = 0
-        self.gamma = self.default_settings['gamma'] # Discount Rate
-        self.memory = deque(maxlen=self.default_settings['max_memory']) # popleft()
-        self.model = Linear_QNet(self.default_settings['input'], self.default_settings['hidden'], self.default_settings['output'])
-        self.trainer = QTrainer(self.model, lr=self.default_settings['lr'], gamma=self.gamma)
+        self.gamma = self.settings['gamma']
+        self.memory = deque(maxlen=self.settings['max_memory'])
+        self.model = Linear_QNet(self.settings['input'], self.settings['hidden'], self.settings['output'])
+        self.target_model = Linear_QNet(self.settings['input'], self.settings['hidden'], self.settings['output'])
+        self.target_model.load_state_dict(self.model.state_dict())
+        self.target_model.eval()
+        self.trainer = QTrainer(self.model, self.target_model, lr=self.settings['lr'], gamma=self.gamma)
 
-        # Randomness
-        self.epsilon = self.default_settings['epsilon_start']
-        self.epsilon_min = self.default_settings['epsilon_min']
-        self.epsilon_decay = self.default_settings['epsilon_decay']
+        self.epsilon = self.settings['epsilon_start']
+        self.epsilon_min = self.settings['epsilon_min']
+        self.epsilon_decay = self.settings['epsilon_decay']
+
+        self.target_update_counter = 0
+        self.target_update_every = 1000
+
+        # Curriculum
+        self.curriculum_level = 1
+        self.level_up_threshold = 20
+        self.recent_scores = deque(maxlen=50)
 
     def get_state(self, game):
         head = game.snake[0]
+        ray_angles = [(0,-1),(1,0),(0,1),(-1,0),(1,-1),(1,1),(-1,1),(-1,-1)]
 
-        dir_l = game.direction == Direction.LEFT
-        dir_r = game.direction == Direction.RIGHT
-        dir_u = game.direction == Direction.UP
-        dir_d = game.direction == Direction.DOWN
+        def get_ray_dist(dx, dy):
+            dist = 0
+            x, y = head.x, head.y
+            for i in range(1, max(game.w, game.h) // BLOCK_SIZE + 1):
+                x += dx * BLOCK_SIZE
+                y += dy * BLOCK_SIZE
+                if game.is_collision(Point(x, y)):
+                    return 1 / i
+            return 0
 
-        def check_danger(dist):
-            # Checks if there is a collision 'dist' blocks away
-            p_r = Point(head.x + (BLOCK_SIZE * dist), head.y)
-            p_l = Point(head.x - (BLOCK_SIZE * dist), head.y)
-            p_u = Point(head.x, head.y - (BLOCK_SIZE * dist))
-            p_d = Point(head.x, head.y + (BLOCK_SIZE * dist))
-            
-            return [
-                (dir_r and game.is_collision(p_r)) or (dir_l and game.is_collision(p_l)) or 
-                (dir_u and game.is_collision(p_u)) or (dir_d and game.is_collision(p_d)), # Straight
-                
-                (dir_u and game.is_collision(p_r)) or (dir_d and game.is_collision(p_l)) or 
-                (dir_l and game.is_collision(p_u)) or (dir_r and game.is_collision(p_d)), # Right
-                
-                (dir_d and game.is_collision(p_r)) or (dir_u and game.is_collision(p_l)) or 
-                (dir_r and game.is_collision(p_u)) or (dir_l and game.is_collision(p_d))  # Left
-            ]
+        dangers = [get_ray_dist(dx, dy) for dx, dy in ray_angles]
 
-        danger_1 = check_danger(1)
-        danger_2 = check_danger(2)
-        danger_3 = check_danger(3)
-
-        has_special_food = game.special_food is not None
-        fill_ratio = game.get_fill_ratio()
+        food_dx = (game.food.x - head.x) / game.w
+        food_dy = (game.food.y - head.y) / game.h
+        special_dx = (game.special_food.x - head.x) / game.w if game.special_food else 0
+        special_dy = (game.special_food.y - head.y) / game.h if game.special_food else 0
+        has_special = 1 if game.special_food else 0
 
         state = [
-            *danger_1, # 3 values
-            *danger_2, # 3 values
-            *danger_3, # 3 values
-
-            # Move Direction
-            dir_l,
-            dir_r,
-            dir_u,
-            dir_d,
-
-            # Food Location
-            game.food.x < game.head.x, # food left
-            game.food.x > game.head.x, # food right
-            game.food.y < game.head.y, # food up
-            game.food.y > game.head.y, # food down
-
-            # Has Special Food on the map?
-            has_special_food,
-
-            # Special Food Location
-            has_special_food and game.special_food.x < game.head.x, # special food left
-            has_special_food and game.special_food.x > game.head.x, # special food right
-            has_special_food and game.special_food.y < game.head.y, # special food up
-            has_special_food and game.special_food.y > game.head.y, # special food down
-
-            # Extra Parameters
+            game.direction == Direction.LEFT,
+            game.direction == Direction.RIGHT,
+            game.direction == Direction.UP,
+            game.direction == Direction.DOWN,
+            *dangers,
+            game.get_fill_ratio() / 100,
             game.current_level / 5,
-            fill_ratio / 100,
-            (100 * len(game.snake) - game.frame_iteration) / 100
+            food_dx, food_dy,
+            special_dx, special_dy,
+            has_special
         ]
-
         return np.array(state, dtype=float)
 
-    def remember(self, state, action, reward, level, next_state, game_over, game_won):
-        self.memory.append((state, action, reward, level, next_state, game_over, game_won)) # popleft if max memory is reached
+    def remember(self, state, action, reward, level, next_state, game_over, game_won, priority=1.0):
+        self.memory.append((state, action, reward, level, next_state, game_over, game_won, priority))
 
     def train_long_memory(self):
-        if len(self.memory) > self.default_settings['batch_size']:
-            mini_sample = random.sample(self.memory, self.default_settings['batch_size']) # list of tuples
-        else:
-            mini_sample = self.memory
-
-        states, actions, rewards, levels, next_states, game_overs, game_wons = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, levels, next_states, game_overs, game_wons)
+        if len(self.memory) < self.settings['batch_size']:
+            return
+        priorities = np.array([t[-1] for t in self.memory]) + 1e-5
+        probs = priorities / priorities.sum()
+        indices = np.random.choice(len(self.memory), self.settings['batch_size'], p=probs, replace=False)
+        batch = [self.memory[i] for i in indices]
+        states, actions, rewards, levels, next_states, dones, _, _ = zip(*batch)
+        self.trainer.train_step(states, actions, rewards, levels, next_states, dones, None)
 
     def train_short_memory(self, state, action, reward, level, next_state, game_over, game_won):
-        self.trainer.train_step(state, action, reward, level, next_state, game_over, game_won)
+        loss = self.trainer.train_step(state, action, reward, level, next_state, game_over, game_won)
+        return loss.item() if loss is not None else 1.0
 
     def get_action(self, state):
-        # Exploration vs Exploitation
         final_move = [0, 0, 0]
-        
-        # Use self.epsilon directly (it now represents a probability between 0 and 1)
         if random.random() < self.epsilon:
             move = random.randint(0, 2)
             final_move[move] = 1
         else:
-            state0 = torch.tensor(state, dtype=torch.float)
-            prediction = self.model(state0)
+            state_t = torch.tensor(state, dtype=torch.float).unsqueeze(0)
+            prediction = self.model(state_t)
             move = torch.argmax(prediction).item()
             final_move[move] = 1
-
         return final_move
 
 def train():
-    plot_scores = []
-    plot_mean_scores = []
-    plot_high_scores = []
-    total_score = 0
-    record = 0
     agent = Agent()
-    game = SnakeGameAI(agent.default_settings['render_ui'])
+    game = SnakeGameAI(agent.settings['render_ui'])
+    record = 0
+    total_score = 0
+    step = 0
 
     while True:
-        # get old State
+        game.max_levels = agent.curriculum_level
         state_old = agent.get_state(game)
-
-        # get move
-        final_move = agent.get_action(state_old)
-
-        # perform the move
-        reward, current_level, game_over, score, game_won, duration = game.play_step(final_move)
+        action = agent.get_action(state_old)
+        reward, level, done, score, won, duration = game.play_step(action)
         state_new = agent.get_state(game)
 
-        # train short memory
-        agent.train_short_memory(state_old, final_move, reward, current_level, state_new, game_over, game_won)
+        td_error = agent.train_short_memory(state_old, action, reward, level, state_new, done, won)
+        agent.remember(state_old, action, reward, level, state_new, done, won, abs(td_error) + 0.01)
 
-        # remember
-        agent.remember(state_old, final_move, reward, current_level, state_new, game_over, game_won)
+        step += 1
+        if step % agent.target_update_every == 0:
+            tau = 0.005
+            for target_param, param in zip(agent.target_model.parameters(), agent.model.parameters()):
+                target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
 
-        # train long memory, plot results
-        if game_over or game_won:
+        if done or won:
+            reason = game.death_reason
             game.reset()
             agent.n_games += 1
             agent.train_long_memory()
 
-            # Decay epsilon
             if agent.epsilon > agent.epsilon_min:
                 agent.epsilon *= agent.epsilon_decay
 
             if score > record:
                 record = score
-                agent.model.save(file_name=agent.default_settings['file_name'])
+                agent.model.save()
 
-            print(f'|    Game:  {agent.n_games}   |  Score:  {score}  |   High Score:  {record}   |   Duration:  {duration}   |   Epsilon:  {agent.epsilon:.3f}   |')
+            print(f'Game {agent.n_games} | Score: {score} | Record: {record} | Level Max: {agent.curriculum_level} | Epsilon: {agent.epsilon:.3f} | Reason: {reason}')
 
-            # Plot Results
-            plot_scores.append(score)
-            total_score += score
-            mean_score = total_score / agent.n_games
-            plot_mean_scores.append(mean_score)
-            plot_high_scores.append(record)
-
-            # plot(plot_scores, plot_mean_scores, plot_high_scores)
+            agent.recent_scores.append(score)
+            if len(agent.recent_scores) == 50 and np.mean(agent.recent_scores) > agent.level_up_threshold:
+                agent.curriculum_level = min(agent.curriculum_level + 1, 5)
+                agent.level_up_threshold += 20
+                print(f"*** CURRICULUM ADVANCED TO LEVEL {agent.curriculum_level} ***")
 
 if __name__ == '__main__':
     train()

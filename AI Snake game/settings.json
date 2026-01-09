@@ -1,17 +1,17 @@
 {
     "max_memory": 100000,
     "batch_size": 256,
-    "lr": 0.0008,
-    "gamma": 0.9,
+    "lr": 0.0005,
+    "gamma": 0.99,
 
-    "input": 25,
-    "hidden": [128, 256, 128],
+    "input": 19,
+    "hidden": [512, 512, 256],
     "output": 3,
 
     "file_name": "model.pth",
-    "render_ui": false,
+    "render_ui": true,
 
     "epsilon_start": 1.0,
-    "epsilon_min": 0.05,
+    "epsilon_min": 0.00,
     "epsilon_decay": 0.995
 }
