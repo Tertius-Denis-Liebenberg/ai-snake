@@ -1,13 +1,13 @@
 {
     "eat_food": 25,
-    "eat_special_food": 40,
-    "level_up": 50,
+    "eat_special_food": 75,
+    "level_up": 60,
     "win": 150,
-    "game_over": -30,
+    "game_over": -50,
 
     "closer_to_food": 0.2,
     "away_from_food": -0.25,
     "hit_wall_penalty": -2,
-    "into_danger_penalty": -5,
+    "into_danger_penalty": -8,
     "looping_penalty": -2
 }

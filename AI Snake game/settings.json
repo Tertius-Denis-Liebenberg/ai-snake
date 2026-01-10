@@ -4,7 +4,7 @@
     "lr": 0.0005,
     "gamma": 0.99,
 
-    "input": 19,
+    "input": 20,
     "hidden": [512, 512, 256],
     "output": 3,
 
@@ -12,6 +12,6 @@
     "render_ui": true,
 
     "epsilon_start": 1.0,
-    "epsilon_min": 0.00,
+    "epsilon_min": 0.001,
     "epsilon_decay": 0.995
 }

@@ -12,7 +12,7 @@ pygame.init()
 
 # ----- Constants -----
 BLOCK_SIZE = 20
-SPEED_BASE = 50
+SPEED_BASE = 15
 
 # Colors
 BLACK = (0, 0, 0)
@@ -65,7 +65,7 @@ class SnakeGameAI:
 
         self.reset()
 
-    def reset(self):
+    def reset(self, level = 1):
         try:
             with open('rewards.json', 'r') as file:
                 self.default_rewards = json.load(file)
@@ -84,7 +84,7 @@ class SnakeGameAI:
         self.recent_positions = deque(maxlen=20)
         self.death_reason = ""
         self.game_won = False
-
+        self.current_level = level
         self._init_level_properties(self.current_level)
 
     def _init_level_properties(self, level):
@@ -262,7 +262,9 @@ class SnakeGameAI:
             if self.special_food:
                 new_special_dist = math.hypot(self.head.x - self.special_food.x, self.head.y - self.special_food.y)
                 delta_special = special_dist - new_special_dist
-                reward += delta_special * 0.8
+                reward += delta_special * 1.2
+                special_priority = max(0, delta_special * 1.5 - delta_food * 0.1)
+                reward += special_priority
 
             if is_looping:
                 reward += self.default_rewards['looping_penalty']
@@ -274,7 +276,7 @@ class SnakeGameAI:
             self.snake.pop()
 
         # Special food spawn
-        if self.score > 0 and self.score % 10 == 0 and self.special_food is None and not eaten:
+        if self.score > 0 and self.score % 7 == 0 and self.special_food is None and not eaten:
             if len(self.snake) < self.max_capacity - 5:
                 self._place_special_food()
 
@@ -334,7 +336,7 @@ class SnakeGameAI:
         if pt in self.wall_set:
             self.death_reason = "Wall"
             return True
-        return False  # Timeout handled separately
+        return False
     
     def _get_danger(self, pt, direction):
         # Immediate forward point

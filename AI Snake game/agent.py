@@ -1,3 +1,4 @@
+import math
 import torch
 import random
 import json
@@ -33,7 +34,7 @@ class Agent:
 
         # Curriculum
         self.curriculum_level = 1
-        self.level_up_threshold = 20
+        self.level_up_threshold = 25
         self.recent_scores = deque(maxlen=50)
 
     def get_state(self, game):
@@ -58,6 +59,10 @@ class Agent:
         special_dy = (game.special_food.y - head.y) / game.h if game.special_food else 0
         has_special = 1 if game.special_food else 0
 
+        special_dist = math.hypot(head.x - game.special_food.x, head.y - game.special_food.y) if game.special_food else float('inf')
+        food_dist = math.hypot(head.x - game.food.x, head.y - game.food.y)
+        special_priority = 1 if special_dist < food_dist * 1.2 else 0
+
         state = [
             game.direction == Direction.LEFT,
             game.direction == Direction.RIGHT,
@@ -68,7 +73,8 @@ class Agent:
             game.current_level / 5,
             food_dx, food_dy,
             special_dx, special_dy,
-            has_special
+            has_special,
+            special_priority
         ]
         return np.array(state, dtype=float)
 
@@ -126,7 +132,7 @@ def train():
 
         if done or won:
             reason = game.death_reason
-            game.reset()
+            game.reset(agent.curriculum_level)
             agent.n_games += 1
             agent.train_long_memory()
 
@@ -142,7 +148,7 @@ def train():
             agent.recent_scores.append(score)
             if len(agent.recent_scores) == 50 and np.mean(agent.recent_scores) > agent.level_up_threshold:
                 agent.curriculum_level = min(agent.curriculum_level + 1, 5)
-                agent.level_up_threshold += 20
+                agent.level_up_threshold += 25
                 print(f"*** CURRICULUM ADVANCED TO LEVEL {agent.curriculum_level} ***")
 
 if __name__ == '__main__':
